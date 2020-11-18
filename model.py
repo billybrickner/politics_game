@@ -219,13 +219,14 @@ def poll():
 
 def check_issue():
 	print("Select an Issue:\n")
-	for i in len(all_issues):
+	for i in range(len(all_issues)):
 		print(f"\t{i}. {all_issues[i]}\n")
 	sel = int(input())
+	
 
 def rally():
 	print("Select an Issue:\n")
-	for i in len(major_issues):
+	for i in range(len(major_issues)):
 		print(f"\t{i}. {major_issues[i]}\n")
 	sel = major_issues[int(input())]
 	sel.strength += random.random()/4
@@ -233,7 +234,7 @@ def rally():
 
 def speech():
 	print("Select an Issue:\n")
-	for i in len(all_issues):
+	for i in range(len(all_issues)):
 		print(f"\t{i}. {all_issues[i]}\n")
 	sel = all_issues[int(input())]
 	major_issues.append(sel)
@@ -241,7 +242,7 @@ def speech():
 	
 def convention():
 	print("Select a Bloc:\n")
-	for i in len(all_blocs):
+	for i in range(len(all_blocs)):
 		print(f"\t{i}. {all_blocs[i]}\n")
 	sel = int(input())
 	sel.party_pref[p1.name] += random.random()/10
@@ -250,7 +251,7 @@ def convention():
 
 def set_stance():
 	print("Select an Issue:\n")
-	for i in len(major_issues):
+	for i in range(len(major_issues)):
 		print(f"\t{i}. {major_issues[i]}\n")
 	sel = major_issues[int(input())]
 	position = int(input())
@@ -258,11 +259,12 @@ def set_stance():
 	print(p1)
 
 def end_turn():
-	turn_order.rotate()
+	turn_order.rotate(1)
 	current_player = turn_order[0]
+	print(f"it is {current_player.name}'s turn")
 
 def show_issues():
-	print("Active Issues: \n")
+	print("Active Issues: ")
 	for each in major_issues:
 		print(each)
 
