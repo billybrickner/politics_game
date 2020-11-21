@@ -26,61 +26,99 @@ def genHSLColor():
     if triangle == 2:
         return (255*randScale, 0, 255*(1-randScale))
 
-class Catagories(object):
-    def __init__(self, num_catagories, num_points):
-        self.num_catagories = num_catagories
-        self.locations = np.random.randint(SCREEN_SIZE, size=(num_catagories,2))
-        self.destinations = np.copy(self.locations)
-        self.colors = [genHSLColor() for color in range(num_catagories)]
-        self.point_totals = [0 for _ in range(num_catagories)]
+class Categories(object):
+    def __init__(self, num_categories, num_points):
+        self.num_categories = num_categories
+        self.locations = np.random.uniform(0, SCREEN_SIZE, size=(num_categories,2))
+        self.directions = np.zeros(shape=(num_categories,2))
+        for cat in range(num_categories):
+            angle = 2*np.pi*np.random.rand()
+            self.directions[cat][0] = np.sin(angle)
+            self.directions[cat][1] = np.cos(angle)
+        self.colors = [genHSLColor() for color in range(num_categories)]
+        self.point_totals = [0 for _ in range(num_categories)]
         self.points = [DataPoint(self) for _ in range(num_points)]
         self.threshold = 0.2
 
-    def getCatagory(self, init=False):
-        cat = np.random.randint(self.num_catagories)
+    def getCategory(self, init=False):
+        cat = np.random.randint(self.num_categories)
         if init:
             self.point_totals[cat] += 1
         return cat
 
-    def getNextDest(self, catagory, location):
-        area = self.point_totals[catagory]/5
+    def getArea(self, category):
+        return  self.point_totals[category]/5
+
+    def getNextDest(self, category, location):
+        area = self.getArea(category)
         thresh = self.threshold
         angle = np.random.rand()*2*np.pi
         offset = np.array([np.sin(angle), np.cos(angle)])
-        if np.linalg.norm(location - self.locations[catagory])/area < thresh:
-            catagory = self.getCatagory()
+        if np.linalg.norm(location - self.locations[category])/area < thresh:
+            category = self.getCategory()
             offset = offset*thresh*area*1.2
         else:
             offset = offset*np.random.rand()*area
-        return (self.locations[catagory] + offset, catagory)
+        return (self.locations[category] + offset, category)
 
-    def getColor(self, catagory):
-        return self.colors[catagory]
+    def getColor(self, category):
+        return self.colors[category]
+
+    def reflectNorm(self, category, normal):
+        current_direction = self.directions[category]
+        mag = np.linalg.norm(normal)
+        projection = np.dot(current_direction, normal)/(mag**2)*normal
+        current_direction -= 2*projection
+
+    def collisions(self):
+        for category in range(self.num_categories):
+            cur_loc = self.locations[category]
+            cur_area = self.getArea(category)
+            # Check collision with other category areas
+            for otherCat in range(self.num_categories):
+                if otherCat != category:
+                    other_loc = self.locations[otherCat]
+                    other_area = self.getArea(otherCat)
+                    cur_distance = np.linalg.norm(cur_loc - other_loc)
+                    exp_distance = cur_area +  other_area
+                    if cur_distance <= exp_distance:
+                        mov_dir = cur_loc - other_loc
+                        cur_loc += mov_dir/cur_distance*(exp_distance-cur_distance)*1.01
+                        self.reflectNorm(category, cur_loc - other_loc)
+                        self.reflectNorm(otherCat, other_loc - cur_loc)
+            if cur_loc[0] <= cur_area:
+                cur_loc[0] = cur_area*1.01
+                self.reflectNorm(category, np.array([1,0]))
+            if cur_loc[0] + cur_area >= SCREEN_SIZE:
+                cur_loc[0] = SCREEN_SIZE - cur_area*1.01
+                self.reflectNorm(category, np.array([-1,0]))
+            if cur_loc[1] <= cur_area:
+                cur_loc[1] = cur_area*1.01
+                self.reflectNorm(category, np.array([0,1]))
+            if cur_loc[1] + cur_area >= SCREEN_SIZE:
+                cur_loc[1] = SCREEN_SIZE - cur_area*1.01
+                self.reflectNorm(category, np.array([0,-1]))
 
     def updateLocations(self, screen):
-        self.threshold = max(0.01, 0.3 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
-        for cat in range(self.num_catagories):
-            speed = 0.1
-            direction = self.destinations[cat] - self.locations[cat]
-            mag = np.linalg.norm(direction)
-            if mag > 10:
-                self.locations[cat] = self.locations[cat] + direction/mag*speed
-            else:
-                print("BEFORE", self.destinations[cat])
-                self.destinations[cat][0] = np.random.randint(SCREEN_SIZE)
-                self.destinations[cat][1] = np.random.randint(SCREEN_SIZE)
-                print("AFTER", self.destinations[cat])
+        self.threshold = max(0.01, 0.15 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
+        self.collisions()
+        for cat in range(self.num_categories):
+            speed = 0.5
+            direction = self.directions[cat]
+            new_loc = self.locations[cat] + direction*speed
+            for i in range(len(self.locations[cat])):
+                self.locations[cat][i] = new_loc[i]
         for point in self.points:
             point.draw(screen)
 
 class DataPoint(object):
-    def __init__(self, catagories):
+    def __init__(self, categories):
         self.rect = pygame.rect.Rect((2, 2, 4, 4))
         self.dest = np.array([self.rect.x, self.rect.y])
         self.gridSize = 24
-        self.catagories = catagories
-        self.catagory = catagories.getCatagory(init=True)
-        self.color = catagories.getColor(self.catagory)
+        self.categories = categories
+        self.category = categories.getCategory(init=True)
+        self.color = categories.getColor(self.category)
 
     def handle_keys(self):
         key = pygame.key.get_pressed()
@@ -102,8 +140,8 @@ class DataPoint(object):
         direction = self.dest - loc
         mag = np.linalg.norm(direction)
         if (mag < 1):
-            self.color = self.catagories.getColor(self.catagory)
-            self.dest, self.catagory = self.catagories.getNextDest(self.catagory, loc)
+            self.color = self.categories.getColor(self.category)
+            self.dest, self.category = self.categories.getNextDest(self.category, loc)
         max_speed = 3
         if mag > 2*max_speed:
             direction = max_speed/mag*direction
@@ -117,9 +155,9 @@ def main():
     clock = pygame.time.Clock()
 
     running = True
-    catagories = Catagories(5, 1500)
+    categories = Categories(9, 1500)
 
-    player = DataPoint(catagories)
+    player = DataPoint(categories)
 
 
     while running:
@@ -133,7 +171,7 @@ def main():
         screen.fill((255, 255, 255))
 
         player.draw(screen)
-        catagories.updateLocations(screen)
+        categories.updateLocations(screen)
         pygame.display.update()
         clock.tick(40)
 main()
