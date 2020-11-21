@@ -3,6 +3,7 @@
 import os
 import random
 import pygame
+from pygame.locals import *
 import math
 import sys
 import numpy as np
@@ -40,7 +41,9 @@ def reflectNorm(current_direction, normal):
 ################################################################################
 # A class for particle system categories.
 class Categories(object):
-    def __init__(self, num_categories, num_points):
+    def __init__(self, num_categories, num_points, category_names=None):
+        if category_names == None:
+            category_names = [f"Category{i}" for i in range(num_categories)]
         self.num_categories = num_categories
         self.locations = np.random.uniform(0, SCREEN_SIZE, size=(num_categories,2))
         self.directions = np.zeros(shape=(num_categories,2))
@@ -51,6 +54,8 @@ class Categories(object):
         self.point_totals = [0 for _ in range(num_categories)]
         self.points = [DataPoint(self) for _ in range(num_points)]
         self.flow_rate = 0.1
+        self.font = pygame.font.SysFont(None,18)
+        self.category_text = [self.font.render(category_names[i], True, (0,0,0)) for i in range(num_categories)]
 
     def getCategory(self, category):
         init = (category == -1)
@@ -87,6 +92,13 @@ class Categories(object):
     def getColor(self, category):
         return self.colors[category]
 
+    def drawText(self):
+        for cat in range(self.num_categories):
+            text = self.category_text[cat]
+            rect = text.get_rect()
+            target_loc = self.locations[cat] - np.array([rect.width/2, rect.height/2])
+            screen.blit(text, target_loc)
+
     def collisions(self):
         radius = SCREEN_SIZE/2
         center = np.array([SCREEN_SIZE/2, SCREEN_SIZE/2])
@@ -101,6 +113,9 @@ class Categories(object):
                     other_size = self.getSize(otherCat)
                     cur_distance = np.linalg.norm(cur_loc - other_loc)
                     exp_distance = cur_size +  other_size
+                    # If there is a collision:
+                    #   1. Move current particle outside of the collision range
+                    #   2. Apply collision physics to the direction of each particle
                     if cur_distance <= exp_distance:
                         mov_dir = cur_loc - other_loc
                         cur_loc += mov_dir/cur_distance*(exp_distance-cur_distance)*marg
@@ -109,6 +124,9 @@ class Categories(object):
             normal = center - cur_loc
             center_distance = np.linalg.norm(normal)
             normal = normal/center_distance
+            # If there is a collision:
+            #   1. Move current particle outside of the collision range
+            #   2. Apply collision physics to the direction of each particle
             if center_distance + cur_size >= radius:
                 normal = normal*(center_distance + cur_size - radius)*marg
                 cur_loc += normal
@@ -121,12 +139,12 @@ class Categories(object):
         self.locations += self.directions*speed
         for point in self.points:
             point.draw(screen)
+        self.drawText()
 
 class DataPoint(object):
     def __init__(self, categories):
         self.rect = pygame.rect.Rect((2, 2, 4, 4))
         self.dest = np.array([self.rect.x, self.rect.y])
-        self.gridSize = 24
         self.categories = categories
         self.category = categories.getCategory(-1)
         self.color = categories.getColor(self.category)
@@ -153,24 +171,20 @@ class DataPoint(object):
         if (mag < 1):
             self.color = self.categories.getColor(self.category)
             self.dest = self.categories.getNextDest(self, location)
-        max_speed = 10
+        max_speed = 3
         if mag > 2*max_speed:
+            if mag > self.categories.getSize(self.category):
+                max_speed = 12
             direction = max_speed/mag*direction
         self.rect.move_ip(round(direction[0]), round(direction[1]))
         pygame.draw.rect(screen, self.color, self.rect)
 
 def main():
     pygame.init()
-
-
     clock = pygame.time.Clock()
-
     running = True
     categories = Categories(9, 1500)
-
     player = DataPoint(categories)
-
-
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
