@@ -58,11 +58,20 @@ class Categories(object):
         self.category_text = [self.font.render(category_names[i], True, (0,0,0)) for i in range(num_categories)]
 
     def getCategory(self, category):
-        init = (category == -1)
-        category = np.random.randint(self.num_categories)
-        if init:
-            self.point_totals[category] += 1
-        return category
+        probability = np.array([[0,4,1,1,1],
+                                [1,0,1,1,1],
+                                [1,4,0,1,1],
+                                [1,4,1,0,1],
+                                [1,4,1,1,0]])
+        if category == -1:
+            new_category = np.random.randint(self.num_categories)
+            self.point_totals[new_category] += 1
+        else:
+            loc_prob = probability[category]/sum(probability[category])
+            new_category = np.random.choice(self.num_categories, p=loc_prob)
+            self.point_totals[category] -= 1
+            self.point_totals[new_category] += 1
+        return new_category
 
     def getSize(self, category):
         return  np.sqrt(self.point_totals[category]) * 3
@@ -184,7 +193,7 @@ def main():
     pygame.init()
     clock = pygame.time.Clock()
     running = True
-    categories = Categories(9, 1500)
+    categories = Categories(5, 1500)
     player = DataPoint(categories)
     while running:
         for event in pygame.event.get():
