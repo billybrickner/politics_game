@@ -100,19 +100,20 @@ class Categories(object):
             screen.blit(text, target_loc)
 
     def collisions(self):
-        radius = SCREEN_SIZE/2
+        radius = SCREEN_SIZE/2*0.6
         center = np.array([SCREEN_SIZE/2, SCREEN_SIZE/2])
+        marg = 1.01     # Margin to separate collision
+        closer = 0.9    # Make collisions where there is more point density
         for category in range(self.num_categories):
             cur_loc = self.locations[category]  # Current Location
             cur_size = self.getSize(category)   # Current Size
-            marg = 1.01                         # Margin to separate collision
             # Check collision with other category sizes
             for otherCat in range(category, self.num_categories):
                 if otherCat != category:
                     other_loc = self.locations[otherCat]
                     other_size = self.getSize(otherCat)
                     cur_distance = np.linalg.norm(cur_loc - other_loc)
-                    exp_distance = cur_size +  other_size
+                    exp_distance = (cur_size +  other_size) * closer
                     # If there is a collision:
                     #   1. Move current particle outside of the collision range
                     #   2. Apply collision physics to the direction of each particle
@@ -135,7 +136,7 @@ class Categories(object):
     def updateLocations(self, screen):
         self.flow_rate = max(0.01, 0.15 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
         self.collisions()
-        speed = 1
+        speed = 0.2
         self.locations += self.directions*speed
         for point in self.points:
             point.draw(screen)
@@ -174,7 +175,7 @@ class DataPoint(object):
         max_speed = 3
         if mag > 2*max_speed:
             if mag > self.categories.getSize(self.category):
-                max_speed = 12
+                max_speed = 8
             direction = max_speed/mag*direction
         self.rect.move_ip(round(direction[0]), round(direction[1]))
         pygame.draw.rect(screen, self.color, self.rect)
