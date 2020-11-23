@@ -237,9 +237,9 @@ def convention(player=current_player):
 	sel = offer_blocs()
 	roll = check_outcome()
 	print(f"The convention was a {outcome_chart[roll]}!")
-	sel.adj_opinion(player, random.random()*(roll-3))
-	if roll >4:
-		print("
+	sel.strengthen(player, random.random()*(roll-3))
+	#if roll >4:
+	#	print("
 	
 
 def benefit(player=current_player):
@@ -250,6 +250,15 @@ def benefit(player=current_player):
 	if roll >4:
 		print(f"It was such a success, it boosted the prominence of {name(sel)}")
 #----------------------------------------------------------------#
+
+deck = [benefit, convention, debate, speech, interview, rally, check_stance, get_opinion, check_issue, poll]
+
+def begin_turn():
+	print(f"It is {name(current_player)}'s turn.")
+	sel = int(input("1. show your Party's details\n 2. show the major issues\n 3. show the major blocs\n 4. draw for your turn\n"))
+	while sel  != 4:
+		pass
+	
 
 def hold_election():
 	for each in all_voters:
