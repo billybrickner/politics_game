@@ -1,5 +1,6 @@
 import random
 import collections
+import utils
 
 class Voter():
 	def __init__(self, name, possible_issues, blocs):
@@ -21,6 +22,7 @@ class Voter():
 			self.internal_preferences[i] = 0.9
 		self.interested_issues = set(random.choices(possible_issues, k=random.randint(3, 6)))
 		self.apply_blocs(*blocs)
+		self.stubbornness = 0 
 		#print(self)
 	
 	def apply_blocs(self, *args):
@@ -45,7 +47,7 @@ class Voter():
 		else:
 			return 0
 	
-	def get_preference_for_candidate(self, candidate, blocs, issues, verbose=False):
+	def get_approval_for_candidate(self, candidate, blocs, issues, verbose=False):
 		if verbose:
 			print(f"{self.name} calculating approval for candidate:{candidate.name}")
 		total_approval = 0
@@ -53,7 +55,7 @@ class Voter():
 			if verbose:
 				print(f"for bloc : {bloc.name}")
 			bloc_preference = self.get_preference_for_bloc(bloc)
-			total_approval += bloc_preference * bloc.get_cand_pref(candidate)
+			total_approval += bloc_preference * bloc.get_opinion(candidate)
 			if verbose:
 				print(total_approval)
 		for issue in issues:
@@ -69,6 +71,42 @@ class Voter():
 		if verbose:
 				print("final approval: ", total_approval)
 		return total_approval
+	
+	def add_important_issue(self, issue, strength=0.5):
+		temp = random.random()
+		if temp > 0.9:
+			self.important_issues[issue.name] = random.randint(1, 8)
+			self.internal_preferences[issue.name] = 0.9
+		elif temp > 0.7:
+			self.important_issues[issue.name] = random.randint(1, 8)
+			self.internal_preferences[issue.name] = 0.6
+		elif temp > 0.5:
+			self.important_issues[issue.name] = random.randint(1, 8)
+			self.internal_preferences[issue.name] = 0.3
+		elif temp>0.3:
+			self.interested_issues.add(issue)
+	
+	def sway_opinion(self, issue, target, strength=0.5, success_mod=1): #moves voter's position on issue towards target
+		resistance = random.random() * success_mod
+		if issue in self.important_issues.keys():
+			direction = 0
+			if self.important_issues[issue.name] > target:
+				direction = -1
+			elif self.important_issues[issue.name] < target:
+				direction = 1
+			if resistance < strength:
+				self.important_issues[issue.name] = self.important_issues[issue.name] + direction
+			if (2*resistance) < strength:
+				self.important_issues[issue.name] = self.important_issues[issue.name] + direction
+			if strength < resistance:
+				self.important_issues[issue.name] = self.important_issues[issue.name] - direction
+			if (2*strength) < resistance:
+				self.important_issues[issue.name] = self.important_issues[issue.name] - direction
+		elif issue in self.interested_issues:
+			if (2*resistance) < strength:
+				self.important_issues[issue.name] = target
+			elif resistance < strength:
+				self.important_issues[issue.name] = target + utils.flip()
 	
 	def calc_vote(self, candidates, blocs, issues):
 		preferences = dict()
@@ -96,13 +134,20 @@ class Voter_Bloc():
 		self.important_issues = kwargs
 		self.party_pref = dict()
 		self.members = 0
-		
-	def set_cand_pref(self, subj_party, desire):
-		self.party_pref[subj_party.name] = desire
-		
-	def get_cand_pref(self, cand):
-		if cand.name in self.party_pref.keys():
-			return self.party_pref[cand.name]
+	
+	def strengthen(self, amount):
+		self.strength += amount
+	
+	def set_opinion(self, candidate, amount):
+		self.party_pref[candidate.name] = amount
+
+	def adj_opinion(self, candidate, amount):
+		if candidate.name in self.party_pref.keys():
+			self.party_pref[candidate.name] += amount
+	
+	def get_opinion(self, candidate):
+		if candidate.name in self.party_pref.keys():
+			return self.party_pref[candidate.name]
 		else:
 			return 0
 	
@@ -114,18 +159,30 @@ class Pol_Issue():
 	def __init__(self, name, strength):
 		self.name = name
 		self.strength = strength
+		self.delta_strength = 0
+		
+	def strengthen(self, amount):
+		self.strength += amount
+		self.delta_strength = amount
 
 	def __str__(self):
 		return f"{self.name} : {self.strength}"
+		
+	def __hash__(self):
+		return self.name.__hash__()
+		
+	def __eq__(self, other):
+		return self.name == other
 
 class Party():
 	def __init__(self, name, **kwargs):
-		self.name = name
-		self.important_issues = kwargs
+		self.name = "The " + name + " Party"
+		self.stances = kwargs
+		self.talking_points = list()
 		
 	def get_agreement(self, issue, pos):
-		if issue in self.important_issues.keys():
-			temp = self.important_issues[issue]
+		if issue in self.stances.keys():
+			temp = self.stances[issue]
 			if temp == pos:
 				return 2
 			if (pos - 1) == temp or (pos+1) == temp:
@@ -137,139 +194,12 @@ class Party():
 			return -1
 		else:
 			return 0
-
-
-valid_issues=[
-	"healthcare", 
-	"welfare",
-	"military", 
-	"candy",
-	"immigration",
-	"high_income_tax", 
-	"middle_income_tax",
-	"low_income_tax",
-	"capital_gains_tax",
-	"property_tax",
-	"industrial_subsidies",
-	"agricultural_subsidies",
-	"childcare_benefits",
-	"space_program",
-	"toll_roads",
-	"rail_expansion",
-	]
 	
-all_issues = [Pol_Issue(name, random.random()) for name in valid_issues]
-major_issues = collections.deque(random.sample(all_issues, k=5), maxlen=5)
-def show_isues():
-	print("Big Issues: ")
-	for each in major_issues:
-		print('\t', each)
+	def add_talking_point(self, issue):
+		self.talking_points.append(issue)
 	
-all_blocs = [Voter_Bloc("doctors",   1.0, "healthcare", healthcare=7),
-		Voter_Bloc("dentists",  0.5, "candy", candy=1),
-		Voter_Bloc("soldiers",  0.9, "military", military=7),
-		Voter_Bloc("motorists", 0.7, "toll_roads", toll_roads=3), 
-		Voter_Bloc("taxpayers", 0.4, "high_income_tax", "middle_income_tax", "low_income_tax", "capital_gains_tax", "property_tax"),
-		]
-def show_blocs():
-	print("Major Players: ")
-	for each in all_blocs:
-		print(each)
-		 
-all_voters = [Voter(f"voter{i:02}", valid_issues, all_blocs) for i in range(400)]
-
-first_party= Party("keg", healthcare=4)
-second_party= Party("pizza", candy=3)
-third_party= Party("donner", welfare=1)
-fourth_party= Party("birthday", military=7)
-
-all_blocs[0].set_cand_pref(first_party,  0.5)
-all_blocs[0].set_cand_pref(second_party, 0.5)
-all_blocs[0].set_cand_pref(third_party,  0.5)
-all_blocs[0].set_cand_pref(fourth_party, 0.5)			
-
-all_blocs[1].set_cand_pref(first_party,  0.5)
-all_blocs[1].set_cand_pref(second_party, 0.5)
-all_blocs[1].set_cand_pref(third_party,  0.5)
-all_blocs[1].set_cand_pref(fourth_party, 0.5)
-
-all_blocs[2].set_cand_pref(first_party,  0.5)
-all_blocs[2].set_cand_pref(second_party, 0.5)
-all_blocs[2].set_cand_pref(third_party,  0.5)
-all_blocs[2].set_cand_pref(fourth_party, 0.5)
-
-all_blocs[3].set_cand_pref(first_party,  0.5)
-all_blocs[3].set_cand_pref(second_party, 0.5)
-all_blocs[3].set_cand_pref(third_party,  0.5)
-all_blocs[3].set_cand_pref(fourth_party, 0.5)
-
-all_blocs[4].set_cand_pref(first_party,  0.5)
-all_blocs[4].set_cand_pref(second_party, 0.5)
-all_blocs[4].set_cand_pref(third_party,  0.5)
-all_blocs[4].set_cand_pref(fourth_party, 0.5)			
-
-results = {"keg":0, "pizza":0, "donner":0, "birthday":0}
-
-turn_order = collections.deque([first_party, second_party, third_party, fourth_party])
-current_player = turn_order[0]
-
-def poll():
-	for each in random.sample(all_voters, k=10):
-		print(each)
-
-def check_issue():
-	print("Select an Issue:\n")
-	for i in range(len(all_issues)):
-		print(f"\t{i}. {all_issues[i]}\n")
-	sel = int(input())
-	
-
-def rally():
-	print("Select an Issue:\n")
-	for i in range(len(major_issues)):
-		print(f"\t{i}. {major_issues[i]}\n")
-	sel = major_issues[int(input())]
-	sel.strength += random.random()/4
-	show_issues()
-
-def speech():
-	print("Select an Issue:\n")
-	for i in range(len(all_issues)):
-		print(f"\t{i}. {all_issues[i]}\n")
-	sel = all_issues[int(input())]
-	major_issues.append(sel)
-	show_issues()
-	
-def convention():
-	print("Select a Bloc:\n")
-	for i in range(len(all_blocs)):
-		print(f"\t{i}. {all_blocs[i]}\n")
-	sel = int(input())
-	sel.party_pref[p1.name] += random.random()/10
-	print(f"{sel.name}'s approval of {p1.name} is now {sel.party_pref[p1.name]}")
-	sel.strength += (random.random() - random.random())/10
-
-def set_stance():
-	print("Select an Issue:\n")
-	for i in range(len(major_issues)):
-		print(f"\t{i}. {major_issues[i]}\n")
-	sel = major_issues[int(input())]
-	position = int(input())
-	p1.important_issues[sel.name] = position
-	print(p1)
-
-def end_turn():
-	turn_order.rotate(1)
-	current_player = turn_order[0]
-	print(f"it is {current_player.name}'s turn")
-
-def show_issues():
-	print("Active Issues: ")
-	for each in major_issues:
-		print(each)
-
-def hold_election():
-	for each in all_voters:
-		res = each.show_vote([first_party, second_party, third_party, fourth_party], all_blocs, major_issues)
-		results[res] += 1
-	print(results)
+	def __hash__(self):
+		return self.name.__hash__()
+		
+	def __eq__(self, other):
+		return self.name == other
