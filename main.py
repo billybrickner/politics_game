@@ -6,7 +6,7 @@ import utils
 from statistics import mean
 
 voter_size_mod =1000
-game_length=100
+game_length=60
 
 	
 major_blocs = [Voter_Bloc("doctors",   1.0, "healthcare", healthcare=7),
@@ -136,11 +136,11 @@ def offer_parties():
 #------------------------------------------------------------------#
 
 #-----------------------POLLS--------------------------------------#
-def poll(size=10):
-	for each in random.sample(all_voters, k=size):
+def poll(player=current_player):
+	for each in random.sample(all_voters, k=10):
 		print(each)
 
-def check_issue():
+def check_issue(player=current_player):
 	chosen = offer_issues()
 	tally = 0
 	for v in all_voters:
@@ -152,7 +152,7 @@ def get_opinion(player=current_player):
 	avg_opinion = mean([v.get_approval_for_candidate(player, major_blocs, major_issues) for v in all_voters])
 	print(f"The average opinion of {player.name} is {avg_opinion}")
 	
-def check_stance(strength=0.5):
+def check_stance(player=current_player, strength=0.5):
 	sel = offer_issues()
 	num_surveyed = 0
 	total_opinion = 0
@@ -183,6 +183,8 @@ def rally(player=current_player):
 
 def interview(player=current_player):
 	sel = offer_issues()
+	for e in player.talking_points:
+		print(name(e))
 	player.add_talking_point(sel)
 	roll = check_outcome()
 	if roll > 5:
@@ -259,37 +261,46 @@ def benefit(player=current_player):
 #----------------------------------------------------------------#
 
 #deck = ["benefit()", "convention()", "debate()", "speech()", "interview()", "rally()", "check_stance()", "get_opinion()", "check_issue()", "poll()"]
-deck = [benefit, convention, debate, speech, interview, rally, check_stance, get_opinion, check_issue, poll]
+events = [benefit, convention, debate, speech, interview, rally, ]
+polls =  [get_opinion, check_issue, check_stance, poll]
 
-def begin_turn():
-	print(f"It is {name(current_player)}'s turn.")
+#campaign_sequence = 
+
+def begin_turn(player):
+	print(f"It is {name(player)}'s turn.")
 	sel = int(input("1. show your Party's details\n 2. show the major issues\n 3. show the major blocs\n 4. draw for your turn\n"))
 	while sel  != 4:
 		if sel == 1:
-			print(current_player)
+			print(player)
 		elif sel == 2:
 			show_issues()
 		elif sel == 3:
 			show_blocs()
 		sel = int(input("1. show your Party's details\n 2. show the major issues\n 3. show the major blocs\n 4. draw for your turn\n"))
-	choices = random.sample(deck, k=3)
+	
+	choices = polls
 	for e in range(len(choices)):
 		print(f"{e}. {choices[e]}")
 	answer = int(input())
 	print("You have chosen ", choices[answer])
-	choices[answer]()
+	choices[answer](player)
 	
-def end_turn():
-	current_player = turn_order.next_turn()
-
+	choices = events
+	for e in range(len(choices)):
+		print(f"{e}. {choices[e]}")
+	answer = int(input())
+	print("You have chosen ", choices[answer])
+	choices[answer](player)
+		
+	
 def hold_election():
 	for each in all_voters:
 		res = each.show_vote([first_party, second_party, third_party, fourth_party], major_blocs, major_issues)
 		results[res] += 1
 	print(results)
 
-game_length = 100
+game_length = 40
 while game_length > 0:
-	begin_turn()
+	begin_turn(current_player)
 	game_length -= 1
 	current_player = turn_order.next_turn()
