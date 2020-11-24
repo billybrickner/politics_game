@@ -26,7 +26,11 @@ second_party= Party("pizza", candy=3)
 third_party= Party("donner", welfare=1)
 fourth_party= Party("birthday", military=7)
 
-turn_order = utils.turn_sequence([first_party, second_party, third_party, fourth_party])
+all_players = [first_party, second_party, third_party, fourth_party]
+for each in all_players:
+	each.add_talking_point(*random.sample(all_issues, k=4))
+
+turn_order = utils.turn_sequence(all_players)
 current_player = turn_order.get_current()
 
 major_blocs[0].set_opinion(first_party,  0.1)
@@ -288,4 +292,4 @@ game_length = 100
 while game_length > 0:
 	begin_turn()
 	game_length -= 1
-	end_turn()
+	current_player = turn_order.next_turn()

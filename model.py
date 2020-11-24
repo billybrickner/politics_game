@@ -195,8 +195,12 @@ class Party():
 		else:
 			return 0
 	
-	def add_talking_point(self, issue):
-		self.talking_points.append(issue)
+	def add_talking_point(self, *args):
+		for issue in args:
+			self.talking_points.append(issue)
+	
+	def __str__(self):
+		return f"{self.name}\n Stances: {self.stances}\n Talking Points: {self.talking_points}"
 	
 	def __hash__(self):
 		return self.name.__hash__()

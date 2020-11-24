@@ -29,7 +29,12 @@ class turn_sequence():
 		return self.player_list[self.index]
 		
 	def next_turn(self):
-		self.index = (self.index + 1) % len(self.player_list)
+		#print("next turn")
+		self.index += 1
+		#print("index", self.index)
+		if self.index >= len(self.player_list):
+			self.index = 0
+		#print("ret= ", self.player_list[self.index])
 		return self.player_list[self.index]
 
 	def get_next(self):
