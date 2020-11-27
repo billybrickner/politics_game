@@ -14,6 +14,8 @@ os.environ["SDL_VIDEO_CENTERED"] = "1"
 SCREEN_SIZE = 600
 screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
 pygame.display.set_caption("Politics Game: Data Display")
+radius = SCREEN_SIZE/2*0.6
+center = np.array([SCREEN_SIZE/2, SCREEN_SIZE/2])
 
 clock = pygame.time.Clock()
 
@@ -22,12 +24,13 @@ clock = pygame.time.Clock()
 def genHue():
     triangle = np.random.randint(3)
     randScale = np.random.rand()
+    blue_buf = 0.5
     if triangle == 0:
         return (255*(1-randScale), 255*randScale, 0)
     if triangle == 1:
-        return (0, 255*(1-randScale), 255*randScale)
+        return (0, 255*(1 - blue_buf*randScale), 255*blue_buf*randScale)
     if triangle == 2:
-        return (255*randScale, 0, 255*(1-randScale))
+        return (255*(1 - blue_buf*randScale), 0, 255*blue_buf*randScale)
 
 def genUnitVector():
     angle = (2*np.pi)*np.random.rand()
@@ -39,11 +42,67 @@ def reflectNorm(current_direction, normal):
     current_direction -= 2*projection
 
 ################################################################################
+# A class for bloc particle systems
+class BlockDisplay(object):
+    def __init__(self, num_blocs, bloc_names=None, thickness = 1.4):
+        self.num_blocs = num_blocs
+        if bloc_names == None:
+            bloc_names = [f"Bloc_{i}" for i in range(num_blocs)]
+        self.bloc_names = bloc_names
+        self.thickness = thickness
+        angle_div = 360.0/float(num_blocs)
+        self.polygons = [self.make_ring(angle_div*i, angle_div*(i+1)) for i in range(num_blocs)]
+        self.hues = [genHue() for _ in range(num_blocs)]
+        self.font = pygame.font.SysFont(None,18)
+        self.bloc_text = [self.font.render(bloc_names[i], True, (0,0,0)) for i in range(num_blocs)]
+
+    def make_ring(self, start_angle, stop_angle, step=5):
+        if stop_angle < start_angle:
+            start_angle, stop_angle = stop_angle, start_angle
+        thickness = self.thickness
+        start_angle = int(start_angle)
+        stop_angle = int(stop_angle)
+        outer_points = []
+        inner_points = []
+        for i in range(start_angle, stop_angle + 1, step):
+            rad = np.pi/180.0 * float(i)
+            x_pos = radius*thickness*np.sin(rad) + center[0]
+            y_pos = radius*thickness*np.cos(rad) + center[1]
+            outer_points += [[x_pos, y_pos]]
+        for i in range(stop_angle, start_angle - 1, -step):
+            rad = np.pi/180.0 * float(i)
+            x_pos = radius*np.sin(rad) + center[0]
+            y_pos = radius*np.cos(rad) + center[1]
+            inner_points += [[x_pos, y_pos]]
+        points = outer_points + inner_points + [outer_points[0]]
+        return np.array(points)
+
+    def drawText(self,screen):
+        thickness = (0.9 + 1.1*self.thickness)/2.0
+        interval = 2*np.pi/float(self.num_blocs)
+        for bloc in range(self.num_blocs):
+            text = self.bloc_text[bloc]
+            rad = (bloc + 0.5)*interval
+            x_pos = radius*thickness*np.sin(rad) + center[0]
+            y_pos = radius*thickness*np.cos(rad) + center[1]
+            rect = text.get_rect()
+            x_pos -= rect.width/2
+            y_pos -= rect.height/2
+            target_loc = [x_pos, y_pos]
+            screen.blit(text, target_loc)
+
+
+    def updateBlocDisplay(self, screen):
+        for polygon, hue in zip(self.polygons, self.hues):
+            pygame.draw.polygon(screen, hue, polygon)
+        self.drawText(screen)
+
+################################################################################
 # A class for particle system categories.
 class Categories(object):
     def __init__(self, num_categories, num_points, category_names=None):
         if category_names == None:
-            category_names = [f"Category{i}" for i in range(num_categories)]
+            category_names = [f"Category_{i}" for i in range(num_categories)]
         self.num_categories = num_categories
         self.locations = np.random.uniform(0, SCREEN_SIZE, size=(num_categories,2))
         self.directions = np.zeros(shape=(num_categories,2))
@@ -101,7 +160,7 @@ class Categories(object):
     def getColor(self, category):
         return self.colors[category]
 
-    def drawText(self):
+    def drawText(self, screen):
         for cat in range(self.num_categories):
             text = self.category_text[cat]
             rect = text.get_rect()
@@ -109,8 +168,6 @@ class Categories(object):
             screen.blit(text, target_loc)
 
     def collisions(self):
-        radius = SCREEN_SIZE/2*0.6
-        center = np.array([SCREEN_SIZE/2, SCREEN_SIZE/2])
         marg = 1.01     # Margin to separate collision
         closer = 0.9    # Make collisions where there is more point density
         for category in range(self.num_categories):
@@ -149,7 +206,7 @@ class Categories(object):
         self.locations += self.directions*speed
         for point in self.points:
             point.draw(screen)
-        self.drawText()
+        self.drawText(screen)
 
 class DataPoint(object):
     def __init__(self, categories):
@@ -163,16 +220,16 @@ class DataPoint(object):
         key = pygame.key.get_pressed()
         dist = 1
         if key[pygame.K_a]:
-           self.dest[0] -= self.gridSize
+            self.dest[0] -= self.gridSize
         if key[pygame.K_d]:
-           self.dest[0] += self.gridSize
+            self.dest[0] += self.gridSize
         if key[pygame.K_w]:
-           self.dest[1] -= self.gridSize
+            self.dest[1] -= self.gridSize
         if key[pygame.K_s]:
-           self.dest[1] += self.gridSize
+            self.dest[1] += self.gridSize
         if key[pygame.K_q]:
-           pygame.quit()
-           sys.exit()
+            pygame.quit()
+            sys.exit()
 
     def draw(self, surface):
         location = np.array([self.rect.x, self.rect.y])
@@ -189,24 +246,48 @@ class DataPoint(object):
         self.rect.move_ip(round(direction[0]), round(direction[1]))
         pygame.draw.rect(screen, self.color, self.rect)
 
-def main():
+def renderGraphics():
     pygame.init()
     clock = pygame.time.Clock()
     running = True
     categories = Categories(5, 1500)
     player = DataPoint(categories)
+    text = 'this text is editable'
+    font = pygame.font.SysFont(None, 48)
+    img = font.render(text, True, (0,0,0))
+
+    rect = img.get_rect()
+    rect.topleft = (20, 20)
+    cursor = Rect(rect.topright, (3, rect.height))
+    blocs = BlockDisplay(24)
+    running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 break
                 running = False
             if event.type == pygame.KEYDOWN:
-                player.handle_keys()
-
+                if event.key == K_BACKSPACE:
+                    if len(text)>0:
+                        text = text[:-1]
+                else:
+                    text += event.unicode
+                img = font.render(text, True, (0,0,0))
+                rect.size=img.get_size()
+                cursor.topleft = rect.topright
         screen.fill((255, 255, 255))
-
+        screen.blit(img, rect)
+        blocs.updateBlocDisplay(screen)
         player.draw(screen)
         categories.updateLocations(screen)
+        if pygame.time.get_ticks()%1000 > 500:
+            pygame.draw.rect(screen, (0,0,0), cursor)
+            if len(text) > 1 and text[-1] == ".":
+                try:
+                    eval(f"main.{text[:-1]}")
+                except Exception as e:
+                    print(e)
         pygame.display.update()
         clock.tick(40)
-main()
+
+renderGraphics()
