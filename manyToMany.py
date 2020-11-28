@@ -22,15 +22,22 @@ clock = pygame.time.Clock()
 ################################################################################
 # Generate a random hue
 def genHue():
-    triangle = np.random.randint(3)
+    sector = np.random.randint(4)
     randScale = np.random.rand()
-    blue_buf = 0.5
-    if triangle == 0:
-        return (255*(1-randScale), 255*randScale, 0)
-    if triangle == 1:
-        return (0, 255*(1 - blue_buf*randScale), 255*blue_buf*randScale)
-    if triangle == 2:
-        return (255*(1 - blue_buf*randScale), 0, 255*blue_buf*randScale)
+    blue_buf = 0.6
+    if sector == 0:
+        return (255*randScale, 255, 0)
+    if sector == 1:
+        return (255, 0, 255*randScale)
+    if sector == 2:
+        return (255*randScale, 255, 0)
+    if sector == 3:
+        return (0, 255, 255*randScale)
+    '''if sector == 4:
+        return (0, 255*(1 - blue_buf*randScale), 255)
+    if sector == 5:
+        return (255*(1 - blue_buf*randScale), 0, 255)
+    '''
 
 def genUnitVector():
     angle = (2*np.pi)*np.random.rand()
@@ -51,12 +58,12 @@ class BlockDisplay(object):
         self.bloc_names = bloc_names
         self.thickness = thickness
         angle_div = 360.0/float(num_blocs)
-        self.polygons = [self.make_ring(angle_div*i, angle_div*(i+1)) for i in range(num_blocs)]
+        self.polygons = [self.make_ring(angle_div*i, angle_div*(i+1),360/num_blocs) for i in range(num_blocs)]
         self.hues = [genHue() for _ in range(num_blocs)]
         self.font = pygame.font.SysFont(None,18)
         self.bloc_text = [self.font.render(bloc_names[i], True, (0,0,0)) for i in range(num_blocs)]
 
-    def make_ring(self, start_angle, stop_angle, step=5):
+    def make_ring(self, start_angle, stop_angle, step=1):
         if stop_angle < start_angle:
             start_angle, stop_angle = stop_angle, start_angle
         thickness = self.thickness
@@ -64,6 +71,7 @@ class BlockDisplay(object):
         stop_angle = int(stop_angle)
         outer_points = []
         inner_points = []
+        step = int(step)
         for i in range(start_angle, stop_angle + 1, step):
             rad = np.pi/180.0 * float(i)
             x_pos = radius*thickness*np.sin(rad) + center[0]
