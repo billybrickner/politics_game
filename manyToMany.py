@@ -108,7 +108,7 @@ class BlockDisplay(object):
 ################################################################################
 # A class for particle system categories.
 class Categories(object):
-    def __init__(self, num_categories, num_points, category_names=None):
+    def __init__(self, num_categories, category_names=None):
         if category_names == None:
             category_names = [f"Category_{i}" for i in range(num_categories)]
         self.num_categories = num_categories
@@ -119,12 +119,11 @@ class Categories(object):
             self.directions[category] += genUnitVector()
         self.colors = [genHue() for color in range(num_categories)]
         self.point_totals = [0 for _ in range(num_categories)]
-        self.points = [DataPoint(self) for _ in range(num_points)]
         self.flow_rate = 0.1
         self.font = pygame.font.SysFont(None,18)
         self.category_text = [self.font.render(category_names[i], True, (0,0,0)) for i in range(num_categories)]
 
-    def getCategory(self, category):
+    def getNextId(self, category):
         probability = np.array([[0,4,1,1,1],
                                 [1,0,1,1,1],
                                 [1,4,0,1,1],
@@ -143,26 +142,28 @@ class Categories(object):
     def getSize(self, category):
         return  np.sqrt(self.point_totals[category]) * 3
 
-    def getNextDest(self, point, location):
-        category = point.category
+    def getNextDest(self, point, category):
+        location = point.getLocation()
+        category = category
         size = self.getSize(category)
         flow_rate = self.flow_rate
         offset = genUnitVector()
         # The probability is calculated based on the probability of dot being a
         # particular distance from the center
         flow_probability =  np.linalg.norm(location - self.locations[category])/size
+
         # Make the next point go to a new category, but don't trigger the flow
         # probability at the next destination
         flow_margin = 1.01
         if flow_probability < flow_rate:
-            category = self.getCategory(category)
+            category = self.getNextId(category)
+            point.dest_num = category
             offset = offset*size*(flow_rate*flow_margin)
         else:
             # The random value for deciding the flow probability is chosen here
             # The effect is that points close to the center get sent to other
             # categories
             offset = offset*np.random.rand()*size
-        point.category = category
         return self.locations[category] + offset
 
     def getColor(self, category):
@@ -212,54 +213,61 @@ class Categories(object):
         self.collisions()
         speed = 0.2
         self.locations += self.directions*speed
-        for point in self.points:
-            point.draw(screen)
         self.drawText(screen)
 
+################################################################################
+# A class for particle system categories.
 class DataPoint(object):
-    def __init__(self, categories):
+    def __init__(self, dest_type):
         self.rect = pygame.rect.Rect((2, 2, 4, 4))
-        self.dest = np.array([self.rect.x, self.rect.y])
-        self.categories = categories
-        self.category = categories.getCategory(-1)
-        self.color = categories.getColor(self.category)
+        self.dest = self.getLocation()
+        self.color = genHue()
+        self.dest_type = dest_type
+        self.dest_num = dest_type.getNextId(-1)
 
-    def handle_keys(self):
-        key = pygame.key.get_pressed()
-        dist = 1
-        if key[pygame.K_a]:
-            self.dest[0] -= self.gridSize
-        if key[pygame.K_d]:
-            self.dest[0] += self.gridSize
-        if key[pygame.K_w]:
-            self.dest[1] -= self.gridSize
-        if key[pygame.K_s]:
-            self.dest[1] += self.gridSize
-        if key[pygame.K_q]:
-            pygame.quit()
-            sys.exit()
+    def getLocation(self):
+        return np.array(self.rect.center)
 
     def draw(self, surface):
-        location = np.array([self.rect.x, self.rect.y])
+        location = self.getLocation()
         direction = self.dest - location
         mag = np.linalg.norm(direction)
-        if (mag < 1):
-            self.color = self.categories.getColor(self.category)
-            self.dest = self.categories.getNextDest(self, location)
         max_speed = 3
         if mag > 2*max_speed:
-            if mag > self.categories.getSize(self.category):
+            if mag > self.dest_type.getSize(self.dest_num):
                 max_speed = 8
             direction = max_speed/mag*direction
         self.rect.move_ip(round(direction[0]), round(direction[1]))
         pygame.draw.rect(screen, self.color, self.rect)
+        return mag
+
+################################################################################
+# A class for displaying voter data.
+class VoterDataDisplay(object):
+    def __init__(self):
+        self.blocs = BlockDisplay(24)
+        self.categories = Categories(5)
+        num_points = 1500
+        self.points = [DataPoint(self.categories) for _ in range(num_points)]
+
+    def updatePoints(self, screen):
+        for point in self.points:
+            mag = point.draw(screen)
+            if (mag < 1):
+                if type(point.dest_type) == Categories:
+                    point.dest = self.categories.getNextDest(point, point.dest_num)
+                    point.color = self.categories.getColor(point.dest_num)
+
+    def draw(self, screen):
+        self.updatePoints(screen)
+        self.blocs.updateBlocDisplay(screen)
+        self.categories.updateLocations(screen)
 
 def renderGraphics():
     pygame.init()
     clock = pygame.time.Clock()
     running = True
-    categories = Categories(5, 1500)
-    player = DataPoint(categories)
+    voter_data = VoterDataDisplay()
     text = 'this text is editable'
     font = pygame.font.SysFont(None, 48)
     img = font.render(text, True, (0,0,0))
@@ -267,13 +275,12 @@ def renderGraphics():
     rect = img.get_rect()
     rect.topleft = (20, 20)
     cursor = Rect(rect.topright, (3, rect.height))
-    blocs = BlockDisplay(24)
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                break
                 running = False
+                break
             if event.type == pygame.KEYDOWN:
                 if event.key == K_BACKSPACE:
                     if len(text)>0:
@@ -285,9 +292,7 @@ def renderGraphics():
                 cursor.topleft = rect.topright
         screen.fill((255, 255, 255))
         screen.blit(img, rect)
-        blocs.updateBlocDisplay(screen)
-        player.draw(screen)
-        categories.updateLocations(screen)
+        voter_data.draw(screen)
         if pygame.time.get_ticks()%1000 > 500:
             pygame.draw.rect(screen, (0,0,0), cursor)
             if len(text) > 1 and text[-1] == ".":
