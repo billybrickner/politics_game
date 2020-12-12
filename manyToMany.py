@@ -8,9 +8,10 @@ import math
 import sys
 import numpy as np
 import random
+import enum
 
 os.environ["SDL_VIDEO_CENTERED"] = "1"
-
+point_states = {'flow','travel'}
 SCREEN_SIZE = 600
 screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
 pygame.display.set_caption("Politics Game: Data Display")
@@ -122,6 +123,7 @@ class Categories(object):
         self.flow_rate = 0.1
         self.font = pygame.font.SysFont(None,18)
         self.category_text = [self.font.render(category_names[i], True, (0,0,0)) for i in range(num_categories)]
+        self.collisions()
 
     def getNextId(self, category):
         probability = np.array([[0,4,1,1,1],
@@ -129,14 +131,11 @@ class Categories(object):
                                 [1,4,0,1,1],
                                 [1,4,1,0,1],
                                 [1,4,1,1,0]])
-        if category == -1:
-            new_category = np.random.randint(self.num_categories)
-            self.point_totals[new_category] += 1
-        else:
-            loc_prob = probability[category]/sum(probability[category])
-            new_category = np.random.choice(self.num_categories, p=loc_prob)
+        if category != -1:
             self.point_totals[category] -= 1
-            self.point_totals[new_category] += 1
+        loc_prob = probability[category]/sum(probability[category])
+        new_category = np.random.choice(self.num_categories, p=loc_prob)
+        self.point_totals[new_category] += 1
         return new_category
 
     def getSize(self, category):
@@ -148,22 +147,21 @@ class Categories(object):
         size = self.getSize(category)
         flow_rate = self.flow_rate
         offset = genUnitVector()
-        # The probability is calculated based on the probability of dot being a
-        # particular distance from the center
-        flow_probability =  np.linalg.norm(location - self.locations[category])/size
+        flow_probability =  np.random.rand()
 
         # Make the next point go to a new category, but don't trigger the flow
         # probability at the next destination
-        flow_margin = 1.01
-        if flow_probability < flow_rate:
-            category = self.getNextId(category)
-            point.dest_num = category
-            offset = offset*size*(flow_rate*flow_margin)
+        travel_margin = 2
+        if flow_probability < flow_rate and point.state == PointStates.FLOW:
+            point.dest_num = self.getNextId(category)
+            point.state = PointStates.TRAVEL
+            offset = offset * travel_margin
         else:
-            # The random value for deciding the flow probability is chosen here
-            # The effect is that points close to the center get sent to other
-            # categories
-            offset = offset*np.random.rand()*size
+            if point.state == PointStates.FLOW:
+                offset = offset*np.random.rand()*size
+            else:
+                point.state = PointStates.FLOW
+                offset = offset * travel_margin
         return self.locations[category] + offset
 
     def getColor(self, category):
@@ -209,11 +207,16 @@ class Categories(object):
                 reflectNorm(self.directions[category], normal)
 
     def updateLocations(self, screen):
-        self.flow_rate = max(0.01, 0.15 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
         self.collisions()
         speed = 0.2
         self.locations += self.directions*speed
         self.drawText(screen)
+
+################################################################################
+# An enum for point states
+class PointStates(enum.Enum):
+    FLOW = 0
+    TRAVEL = 1
 
 ################################################################################
 # A class for particle system categories.
@@ -224,6 +227,7 @@ class DataPoint(object):
         self.color = genHue()
         self.dest_type = dest_type
         self.dest_num = dest_type.getNextId(-1)
+        self.state = PointStates.FLOW
 
     def getLocation(self):
         return np.array(self.rect.center)
@@ -231,15 +235,16 @@ class DataPoint(object):
     def draw(self, surface):
         location = self.getLocation()
         direction = self.dest - location
-        mag = np.linalg.norm(direction)
+        close_detect = np.sum(np.abs(direction))
         max_speed = 3
-        if mag > 2*max_speed:
-            if mag > self.dest_type.getSize(self.dest_num):
+        if close_detect > 2*max_speed:
+            if close_detect > self.dest_type.getSize(self.dest_num):
                 max_speed = 8
-            direction = max_speed/mag*direction
+            direction = max_speed/close_detect*direction
+
         self.rect.move_ip(round(direction[0]), round(direction[1]))
         pygame.draw.rect(screen, self.color, self.rect)
-        return mag
+        return close_detect < 1
 
 ################################################################################
 # A class for displaying voter data.
@@ -247,18 +252,21 @@ class VoterDataDisplay(object):
     def __init__(self):
         self.blocs = BlockDisplay(24)
         self.categories = Categories(5)
-        num_points = 1500
+        self.categories.collisions()
+        num_points = 1000
         self.points = [DataPoint(self.categories) for _ in range(num_points)]
 
     def updatePoints(self, screen):
         for point in self.points:
-            mag = point.draw(screen)
-            if (mag < 1):
+            arrived = point.draw(screen)
+            if arrived:
                 if type(point.dest_type) == Categories:
+                    if point.state == PointStates.FLOW:
+                        point.color = self.categories.getColor(point.dest_num)
                     point.dest = self.categories.getNextDest(point, point.dest_num)
-                    point.color = self.categories.getColor(point.dest_num)
 
     def draw(self, screen):
+        self.categories.flow_rate = max(0.01, 0.15 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
         self.updatePoints(screen)
         self.blocs.updateBlocDisplay(screen)
         self.categories.updateLocations(screen)
