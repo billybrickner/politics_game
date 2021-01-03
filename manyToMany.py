@@ -7,6 +7,7 @@ from pygame.locals import *
 import math
 import sys
 import numpy as np
+import tensorflow as tf
 import random
 import enum
 
@@ -16,7 +17,7 @@ SCREEN_SIZE = 600
 screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
 pygame.display.set_caption("Politics Game: Data Display")
 radius = SCREEN_SIZE/2*0.6
-center = np.array([SCREEN_SIZE/2, SCREEN_SIZE/2])
+center = tf.convert_to_tensor([SCREEN_SIZE/2, SCREEN_SIZE/2])
 
 clock = pygame.time.Clock()
 
@@ -42,11 +43,11 @@ def genHue():
 
 def genUnitVector():
     angle = (2*np.pi)*np.random.rand()
-    return np.array([np.sin(angle), np.cos(angle)])
+    return tf.convert_to_tensor([tf.sin(angle), tf.cos(angle)])
 
 def reflectNorm(current_direction, normal):
-    mag = np.linalg.norm(normal)
-    projection = np.dot(current_direction, normal)/(mag**2)*normal
+    mag = tf.linalg.norm(normal)
+    projection = tf.dot(current_direction, normal)/(mag**2)*normal
     current_direction -= 2*projection
 
 ################################################################################
@@ -75,16 +76,16 @@ class BlockDisplay(object):
         step = int(step)
         for i in range(start_angle, stop_angle + 1, step):
             rad = np.pi/180.0 * float(i)
-            x_pos = radius*thickness*np.sin(rad) + center[0]
-            y_pos = radius*thickness*np.cos(rad) + center[1]
+            x_pos = radius*thickness*tf.sin(rad) + center[0]
+            y_pos = radius*thickness*tf.cos(rad) + center[1]
             outer_points += [[x_pos, y_pos]]
         for i in range(stop_angle, start_angle - 1, -step):
             rad = np.pi/180.0 * float(i)
-            x_pos = radius*np.sin(rad) + center[0]
-            y_pos = radius*np.cos(rad) + center[1]
+            x_pos = radius*tf.sin(rad) + center[0]
+            y_pos = radius*tf.cos(rad) + center[1]
             inner_points += [[x_pos, y_pos]]
         points = outer_points + inner_points + [outer_points[0]]
-        return np.array(points)
+        return tf.convert_to_tensor(points)
 
     def drawText(self,screen):
         thickness = (0.9 + 1.1*self.thickness)/2.0
@@ -92,8 +93,8 @@ class BlockDisplay(object):
         for bloc in range(self.num_blocs):
             text = self.bloc_text[bloc]
             rad = (bloc + 0.5)*interval
-            x_pos = radius*thickness*np.sin(rad) + center[0]
-            y_pos = radius*thickness*np.cos(rad) + center[1]
+            x_pos = radius*thickness*tf.sin(rad) + center[0]
+            y_pos = radius*thickness*tf.cos(rad) + center[1]
             rect = text.get_rect()
             x_pos -= rect.width/2
             y_pos -= rect.height/2
@@ -113,11 +114,11 @@ class Categories(object):
         if category_names == None:
             category_names = [f"Category_{i}" for i in range(num_categories)]
         self.num_categories = num_categories
-        self.locations = np.random.uniform(0, SCREEN_SIZE, size=(num_categories,2))
-        self.directions = np.zeros(shape=(num_categories,2))
+        self.locations = tf.random.uniform(maxval=SCREEN_SIZE, shape=[num_categories,2])
+        self.directions = tf.zeros(shape=(num_categories,2))
         # Give each category a random direction
         for category in range(num_categories):
-            self.directions[category] += genUnitVector()
+            self.directions[category] += tf.convert_to_tensor(genUnitVector())
         self.colors = [genHue() for color in range(num_categories)]
         self.point_totals = [0 for _ in range(num_categories)]
         self.flow_rate = 0.1
@@ -126,7 +127,7 @@ class Categories(object):
         self.collisions()
 
     def getNextId(self, category):
-        probability = np.array([[0,4,1,1,1],
+        probability = tf.convert_to_tensor([[0,4,1,1,1],
                                 [1,0,1,1,1],
                                 [1,4,0,1,1],
                                 [1,4,1,0,1],
@@ -134,12 +135,12 @@ class Categories(object):
         if category != -1:
             self.point_totals[category] -= 1
         loc_prob = probability[category]/sum(probability[category])
-        new_category = np.random.choice(self.num_categories, p=loc_prob)
+        new_category = tf.random.choice(self.num_categories, p=loc_prob)
         self.point_totals[new_category] += 1
         return new_category
 
     def getSize(self, category):
-        return  np.sqrt(self.point_totals[category]) * 3
+        return  tf.sqrt(self.point_totals[category]) * 3
 
     def getNextDest(self, point, category):
         location = point.getLocation()
@@ -147,7 +148,7 @@ class Categories(object):
         size = self.getSize(category)
         flow_rate = self.flow_rate
         offset = genUnitVector()
-        flow_probability =  np.random.rand()
+        flow_probability =  tf.random.uniform()
 
         # Make the next point go to a new category, but don't trigger the flow
         # probability at the next destination
@@ -158,7 +159,7 @@ class Categories(object):
             offset = offset * travel_margin
         else:
             if point.state == PointStates.FLOW:
-                offset = offset*np.random.rand()*size
+                offset = offset*tf.random.uniform()*size
             else:
                 point.state = PointStates.FLOW
                 offset = offset * travel_margin
@@ -171,7 +172,7 @@ class Categories(object):
         for cat in range(self.num_categories):
             text = self.category_text[cat]
             rect = text.get_rect()
-            target_loc = self.locations[cat] - np.array([rect.width/2, rect.height/2])
+            target_loc = self.locations[cat] - tf.convert_to_tensor([rect.width/2, rect.height/2])
             screen.blit(text, target_loc)
 
     def collisions(self):
@@ -185,7 +186,7 @@ class Categories(object):
                 if otherCat != category:
                     other_loc = self.locations[otherCat]
                     other_size = self.getSize(otherCat)
-                    cur_distance = np.linalg.norm(cur_loc - other_loc)
+                    cur_distance = tf.linalg.norm(cur_loc - other_loc)
                     exp_distance = (cur_size +  other_size) * closer
                     # If there is a collision:
                     #   1. Move current particle outside of the collision range
@@ -196,7 +197,7 @@ class Categories(object):
                         reflectNorm(self.directions[category], cur_loc - other_loc)
                         reflectNorm(self.directions[otherCat], other_loc - cur_loc)
             normal = center - cur_loc
-            center_distance = np.linalg.norm(normal)
+            center_distance = tf.linalg.norm(normal)
             normal = normal/center_distance
             # If there is a collision:
             #   1. Move current particle outside of the collision range
@@ -230,12 +231,12 @@ class DataPoint(object):
         self.state = PointStates.FLOW
 
     def getLocation(self):
-        return np.array(self.rect.center)
+        return tf.convert_to_tensor(self.rect.center)
 
     def draw(self, surface):
         location = self.getLocation()
         direction = self.dest - location
-        close_detect = np.sum(np.abs(direction))
+        close_detect = tf.sum(tf.abs(direction))
         max_speed = 3
         if close_detect > 2*max_speed:
             if close_detect > self.dest_type.getSize(self.dest_num):
@@ -266,7 +267,7 @@ class VoterDataDisplay(object):
                     point.dest = self.categories.getNextDest(point, point.dest_num)
 
     def draw(self, screen):
-        self.categories.flow_rate = max(0.01, 0.15 * np.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
+        self.categories.flow_rate = max(0.01, 0.15 * tf.sin(pygame.time.get_ticks()*2*np.pi/1000/10))
         self.updatePoints(screen)
         self.blocs.updateBlocDisplay(screen)
         self.categories.updateLocations(screen)
